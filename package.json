@@ -41,6 +41,7 @@
 		"clsx": "^2.1.0",
 		"daisyui": "^4.9.0",
 		"extract-colors": "^4.0.2",
+		"javascript-color-gradient": "^2.4.4",
 		"lucide-svelte": "^0.359.0",
 		"mode-watcher": "^0.3.0",
 		"tailwind-merge": "^2.2.2",

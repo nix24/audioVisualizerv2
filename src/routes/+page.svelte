@@ -6,20 +6,24 @@
 	import { onMount } from 'svelte';
 	import { extractColors } from 'extract-colors';
 	import type { FinalColor } from 'extract-colors/lib/types/Color';
+	import Gradient from 'javascript-color-gradient';
+
 	//audio source is audio element gotten by id
 	let audio: HTMLAudioElement;
 	let audioMotion: AudioMotionAnalyzer;
 	let youtubeUrl = 'https://youtu.be/8Yec-3UfWII?si=oCqNuvQ8wkcp286V';
 	let metadata: YTMetadata;
 	let isLoading = false;
+	$: width = 1000;
+	$: height = 1000;
 
 	onMount(() => {
 		//set height dynamically based on window height
 		audio = document.getElementById('audio') as HTMLAudioElement;
 		audioMotion = new AudioMotionAnalyzer(document.getElementById('container') as HTMLElement, {
 			source: audio,
-			height: 500,
-			width: 1000,
+			height: height,
+			width: width,
 			alphaBars: false,
 			ansiBands: true,
 			barSpace: 0.25,
@@ -67,6 +71,11 @@
 			volume: 1,
 			weightingFilter: 'D'
 		});
+
+		window.addEventListener('resize', () => {
+			height = window.innerHeight;
+			width = window.innerWidth;
+		});
 	});
 	function handleFileChange(event: Event) {
 		const file = (event.target as HTMLInputElement).files?.item(0);
@@ -77,7 +86,7 @@
 	}
 	const getMetadata = async () => {
 		const videoUrl: string = youtubeUrl;
-		const requestUrl: string = `http://youtube.com/oembed?url=${videoUrl}&format=json`;
+		const requestUrl: string = `https://youtube.com/oembed?url=${videoUrl}&format=json`;
 		const result = await fetch(requestUrl);
 		metadata = await result.json();
 	};
@@ -132,9 +141,14 @@
 		if (container) {
 			//convert the colors map to an array of hex values ['hex1', 'hex2', 'hex3']
 			const hexColors = Object.values(colors).map((color) => color.color);
-			console.log(hexColors);
-			container.style.background = `linear-gradient(45deg, ${hexColors.join(', ')})`;
-			console.log(`linear-gradient(45deg, ${hexColors.join(', ')})`);
+			//using Gradient library to generate a linear gradient from the colors
+			const gradient = new Gradient()
+				.setColorGradient(...hexColors)
+				.setMidpoint(20)
+				.getColors(2);
+			container.style.background = `linear-gradient(45deg, ${gradient.join(', ')})`;
+			//add a slight dimming effect to the background
+			container.style.filter = 'brightness(0.7)';
 		}
 	};
 </script>
@@ -150,7 +164,7 @@
 				class="Dfile-input Dfile-input-md mb-4"
 			/>
 		</div>
-		<form on:submit|preventDefault={handleVisualizer} class="Djoin mb-8 flex">
+		<form on:submit|preventDefault={handleVisualizer} class="Djoin z-20 mb-8 flex">
 			<Input
 				class="Dinput Djoin-item max-w-xs ring-1 ring-secondary focus:ring-2 focus:ring-primary"
 				type="text"
@@ -166,9 +180,9 @@
 		{/if}
 		<div class="z-10 flex flex-1 flex-col items-center px-10">
 			{#if metadata}
-				<div class="mb-8 flex flex-col items-center">
+				<div class="mb-8 flex flex-col items-center justify-center">
 					<img
-						class="mb-4 h-40 w-40 rounded-full border"
+						class="mb-4 h-32 w-40 rounded-lg border object-cover"
 						src={metadata.thumbnail_url}
 						alt={metadata.title}
 					/>
@@ -178,7 +192,7 @@
 			{:else}
 				<div class="mb-8 flex items-center justify-center">
 					<img
-						class="h-40 w-40 rounded-full"
+						class="mb-4 h-28 w-40 rounded-lg border object-cover"
 						src="https://via.placeholder.com/200"
 						alt="placeholder"
 					/>
