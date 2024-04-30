@@ -1,82 +1,60 @@
 <script lang="ts">
-	import Button from '$lib/components/ui/button/button.svelte';
-	import Input from '$lib/components/ui/input/input.svelte';
 	import AudioMotionAnalyzer from 'audiomotion-analyzer';
 	import type { YTMetadata } from '$lib/types';
-	import { onMount } from 'svelte';
-	import { extractColors } from 'extract-colors';
-	import type { FinalColor } from 'extract-colors/lib/types/Color';
-	import Gradient from 'javascript-color-gradient';
+	import { onDestroy, onMount } from 'svelte';
+	import {
+		extractColorPalette,
+		applyBackgroundColor,
+		getMetadata,
+		getYTAudio
+	} from '../util/helperFunctions';
+	import { createAudioMotionConfig } from '../util/audioMotionConfig';
 
 	//audio source is audio element gotten by id
 	let audio: HTMLAudioElement;
 	let audioMotion: AudioMotionAnalyzer;
-	let youtubeUrl = 'https://youtu.be/8Yec-3UfWII?si=oCqNuvQ8wkcp286V';
+	// biome-ignore lint/style/useConst: <explanation>
+	let youtubeUrl =
+		'https://www.youtube.com/watch?v=yH88qRmgkGI&pp=ygUUY29weXJpZ2h0IGZyZWUgbXVzaWM%3D';
 	let metadata: YTMetadata;
 	let isLoading = false;
+	// biome-ignore lint/suspicious/noConfusingLabels: <explanation>
 	$: width = 1000;
+	// biome-ignore lint/suspicious/noConfusingLabels: <explanation>
 	$: height = 1000;
-
+	// biome-ignore lint/suspicious/noConfusingLabels: <explanation>
+	$: console.log(width, height);
+	let fileInput: HTMLInputElement;
+	let youtubeInput: HTMLButtonElement;
+	let mode = 'youtube';
 	onMount(() => {
 		//set height dynamically based on window height
 		audio = document.getElementById('audio') as HTMLAudioElement;
-		audioMotion = new AudioMotionAnalyzer(document.getElementById('container') as HTMLElement, {
-			source: audio,
-			height: height,
-			width: width,
-			alphaBars: false,
-			ansiBands: true,
-			barSpace: 0.25,
-			bgAlpha: 0,
-			channelLayout: 'single',
-			colorMode: 'gradient',
-			fftSize: 8192,
-			fillAlpha: 0.6,
-			frequencyScale: 'log',
-			gradient: 'rainbow',
-			ledBars: false,
-			linearAmplitude: true,
-			linearBoost: 1.8,
-			lineWidth: 1.5,
-			loRes: false,
-			lumiBars: false,
-			maxDecibels: -25,
-			maxFPS: 0,
-			maxFreq: 20000,
-			minDecibels: -85,
-			minFreq: 20,
-			mirror: 1,
-			mode: 2,
-			noteLabels: false,
-			outlineBars: false,
-			overlay: true,
-			peakLine: false,
-			radial: false,
-			radialInvert: false,
-			radius: 0.3,
-			reflexAlpha: 0.25,
-			reflexFit: true,
-			reflexRatio: 0.3,
-			roundBars: false,
-			showBgColor: true,
-			showFPS: false,
-			showPeaks: true,
-			showScaleX: false,
-			showScaleY: false,
-			smoothing: 0.5,
-			spinSpeed: 1,
-			splitGradient: false,
-			trueLeds: true,
-			useCanvas: true,
-			volume: 1,
-			weightingFilter: 'D'
-		});
+		const audioMotionConfig = createAudioMotionConfig(audio, width, height);
+		audioMotion = new AudioMotionAnalyzer(
+			document.getElementById('container') as HTMLElement,
+			audioMotionConfig
+		);
 
 		window.addEventListener('resize', () => {
 			height = window.innerHeight;
 			width = window.innerWidth;
+			const visualizerContainer = document.getElementsByClassName(
+				'visualizer-container'
+			)[0] as HTMLElement;
+			//if hieght is greater than 550 and less than 1000
+			if (height > 550 && height < 800) {
+				visualizerContainer.style.height = `${height - 400}px`;
+			}
 		});
 	});
+	onDestroy(() => {
+		if (audioMotion) audioMotion.destroy();
+		if (audio) audio.pause();
+	});
+	function switchMode(selectedMode: string) {
+		mode = selectedMode;
+	}
 	function handleFileChange(event: Event) {
 		const file = (event.target as HTMLInputElement).files?.item(0);
 		if (file) {
@@ -84,109 +62,42 @@
 			audio.src = url;
 		}
 	}
-	const getMetadata = async () => {
-		const videoUrl: string = youtubeUrl;
-		const requestUrl: string = `https://youtube.com/oembed?url=${videoUrl}&format=json`;
-		const result = await fetch(requestUrl);
-		metadata = await result.json();
-	};
-	const getYTAudio = async () => {
-		console.log('getting audio');
-		const requestUrl = `/api/ytAudio?url=${encodeURIComponent(youtubeUrl)}`;
-		console.log('audio found, awaiting response');
-		const res = await fetch(requestUrl);
-		const audioBlob = await res.blob();
-		const audioUrl = URL.createObjectURL(audioBlob);
-		console.log('response received, setting audio source');
-		audio.src = audioUrl;
-	};
 
 	const handleVisualizer = async () => {
 		isLoading = true;
 		//grab the id file-input and youtube-input to disable them while loading
-		const fileInput = document.getElementById('file-input') as HTMLInputElement;
-		const youtubeInput = document.getElementById('youtube-input') as HTMLFormElement;
-		fileInput.disabled = true;
-		youtubeInput.disabled = true;
-		await getYTAudio();
-		await getMetadata();
+		if (fileInput && youtubeInput) {
+			fileInput.disabled = true;
+			youtubeInput.disabled = true;
+		}
+		await getYTAudio(youtubeUrl, audio);
+		metadata = await getMetadata(youtubeUrl);
 		const colorPalette = await extractColorPalette(metadata.thumbnail_url);
-		applyBackgroundColor(colorPalette);
+		applyBackgroundColor(audioMotion, colorPalette);
 		isLoading = false;
-		fileInput.disabled = false;
-		youtubeInput.disabled = false;
-	};
-
-	const extractColorPalette = async (imageURL: string) => {
-		const proxyURL = `/api/thumbnailUrl?url=${encodeURIComponent(imageURL)}`;
-		const options = {
-			pixels: 64000,
-			distance: 0.22,
-			saturationDistance: 0.2,
-			lightnessDistance: 0.2,
-			hueDistance: 0.083333333,
-			count: 5
-		};
-		const colors: FinalColor[] = await extractColors(proxyURL, options);
-		return colors.map((color) => color.hex);
-	};
-	const applyBackgroundColor = (colors: string[]) => {
-		audioMotion.registerGradient('thumbnailGradient', {
-			bgColor: '#000',
-			dir: 'h',
-			colorStops: colors
-		});
-		audioMotion.gradient = 'thumbnailGradient';
-		const container = document.getElementById('mainContainer');
-		if (container) {
-			//convert the colors map to an array of hex values ['hex1', 'hex2', 'hex3']
-			const hexColors = Object.values(colors).map((color) => color.color);
-			//using Gradient library to generate a linear gradient from the colors
-			const gradient = new Gradient()
-				.setColorGradient(...hexColors)
-				.setMidpoint(20)
-				.getColors(2);
-			container.style.background = `linear-gradient(45deg, ${gradient.join(', ')})`;
-			//add a slight dimming effect to the background
-			container.style.filter = 'brightness(0.7)';
+		if (fileInput && youtubeInput) {
+			fileInput.disabled = false;
+			youtubeInput.disabled = false;
 		}
 	};
 </script>
 
-<main id="mainContainer">
-	<div class="flex min-h-screen flex-col items-center">
-		<div class="flex items-center">
-			<Input
-				type="file"
-				id="file-input"
-				accept="audio/*"
-				on:change={handleFileChange}
-				class="Dfile-input Dfile-input-md mb-4"
-			/>
-		</div>
-		<form on:submit|preventDefault={handleVisualizer} class="Djoin z-20 mb-8 flex">
-			<Input
-				class="Dinput Djoin-item max-w-xs ring-1 ring-secondary focus:ring-2 focus:ring-primary"
-				type="text"
-				bind:value={youtubeUrl}
-				placeholder="Enter youtube URL link"
-			/>
-			<Button id="youtube-input" class="Dbtn Djoin-item Dbtn-sm" type="submit"
-				>Load Visualizer</Button
-			>
-		</form>
-		{#if isLoading}
-			<div class="loading-overlay">Loading...</div>
-		{/if}
-		<div class="z-10 flex flex-1 flex-col items-center px-10">
+<main class="mx-auto flex flex-col items-center backdrop-blur-lg" id="mainContainer ">
+	{#if isLoading}
+		<div class="loading-overlay">Loading...</div>
+	{/if}
+	<div class="content-wrapper z-[2]">
+		<div class="z-10 mb-32 flex flex-1 flex-col items-center p-10">
 			{#if metadata}
 				<div class="mb-8 flex flex-col items-center justify-center">
 					<img
-						class="mb-4 h-32 w-40 rounded-lg border object-cover"
+						class="h-42 mb-4 w-40 rounded-lg border object-cover"
 						src={metadata.thumbnail_url}
 						alt={metadata.title}
 					/>
-					<h2 class="pulse mb-2 p-10 text-2xl font-bold">{metadata.title}</h2>
+					<h2 class="mb-2 animate-pulse rounded-badge bg-base-300 p-5 text-lg font-bold">
+						{metadata.title}
+					</h2>
 					<p class="text-lg">{metadata.author_name}</p>
 				</div>
 			{:else}
@@ -202,17 +113,67 @@
 				<source src="" type="audio/mpeg" />
 				Your browser does not support the audio element.
 			</audio>
+			<div class="mt-5">
+				{#if mode === 'mp3'}
+					<!-- MP3 file input -->
+					<div class="flex cursor-pointer items-center">
+						<input
+							type="file"
+							id="file-input"
+							accept="audio/*"
+							on:change={handleFileChange}
+							bind:this={fileInput}
+							class="Dfile-input Dfile-input-bordered mb-4"
+						/>
+					</div>
+				{:else}
+					<!-- YouTube URL input -->
+					<form on:submit|preventDefault={handleVisualizer} class="Djoin z-20 mb-8 flex">
+						<input
+							class="Dinput Dinput-md Djoin-item max-w-xs ring-1 ring-secondary focus:ring-2 focus:ring-primary"
+							type="text"
+							bind:value={youtubeUrl}
+							placeholder="Enter youtube URL link"
+						/>
+						<button
+							id="youtube-input"
+							class="Dbtn Djoin-item Dbtn-md"
+							type="submit"
+							bind:this={youtubeInput}>Load Visualizer</button
+						>
+					</form>
+				{/if}
+			</div>
+			<div class="Djoin mt-4 space-x-2">
+				<button class="Dbtn Dbtn-primary Djoin-item Dbtn-sm" on:click={() => switchMode('mp3')}
+					>MP3</button
+				>
+				<button
+					class="Dbtn Dbtn-secondary Djoin-item Dbtn-sm"
+					on:click={() => switchMode('youtube')}>YouTube</button
+				>
+			</div>
 		</div>
-		<div
-			id="container"
-			class="fixed bottom-0 left-0 right-0 flex items-center justify-center"
-		></div>
 	</div>
+	<div id="container" class="visualizer-container z-[1]"></div>
 </main>
 
 <style>
-	audio {
+	.visualizer-container {
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.content-wrapper {
 		width: 100%;
+		height: 100%;
+	}
+	audio {
+		width: 330px;
 		height: 40px;
 		background-color: transparent;
 		border: none;

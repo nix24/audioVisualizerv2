@@ -36,6 +36,7 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@types/javascript-color-gradient": "^2.4.2",
 		"audiomotion-analyzer": "^4.4.0",
 		"bits-ui": "^0.20.1",
 		"clsx": "^2.1.0",

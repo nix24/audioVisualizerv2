@@ -13,3 +13,8 @@ export interface YTMetadata {
 	thumbnail_url: string;
 	html: string;
 }
+
+export interface GradientColor {
+	pos: number;
+	color: string;
+}
